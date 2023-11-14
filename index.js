@@ -27,7 +27,8 @@ async function run() {
     try {
         await client.connect();
         const userCollections = client.db('hospitalDb').collection('allUsers')
-
+        const appointmentCollection = client.db('hospitalDb').collection('allAppointments')
+        const allDoctorsCollection = client.db('hospitalDb').collection('allDoctors')
         app.get('/user', async (req, res) => {
             const result = await userCollections.find().toArray();
             res.send(result)
@@ -72,6 +73,20 @@ async function run() {
         })
 
 
+
+        // appointment
+        app.post('/appointments', async (req, res) => {
+            const appointment = req.body;
+            const result = await appointmentCollection.insertOne(appointment);
+            console.log(appointment, "server user");
+            res.send(result)
+        })
+        app.get('/alldoctors', async (req, res) => {
+            const result = await allDoctorsCollection.find().toArray();
+            res.send(result)
+        })
+
+
         await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     }
@@ -80,8 +95,6 @@ async function run() {
     }
 }
 run().catch(console.dir);
-
-
 // connet to port 
 app.listen(port, () => {
     console.log('server is running on port ', port);
