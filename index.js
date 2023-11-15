@@ -29,6 +29,7 @@ async function run() {
         const userCollections = client.db('hospitalDb').collection('allUsers')
         const appointmentCollection = client.db('hospitalDb').collection('allAppointments')
         const allDoctorsCollection = client.db('hospitalDb').collection('allDoctors')
+        const allAdmissionCollection = client.db('hospitalDb').collection('allAdmissions')
         app.get('/user', async (req, res) => {
             const result = await userCollections.find().toArray();
             res.send(result)
@@ -83,6 +84,22 @@ async function run() {
         })
         app.get('/alldoctors', async (req, res) => {
             const result = await allDoctorsCollection.find().toArray();
+            res.send(result)
+        })
+
+        // admission
+        app.post('/admission', async (req, res) => {
+            const admission = req.body;
+            const result = await allAdmissionCollection.insertOne(admission);
+            console.log(admission, "server user");
+            res.send({ success: true })
+        })
+        app.get('/admission', async (req, res) => {
+            let query = {}
+            if (req.query?.Pemail) {
+                query['Pemail'] = req.query.Pemail;
+            }
+            const result = await allAdmissionCollection.find(query).toArray()
             res.send(result)
         })
 
