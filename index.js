@@ -30,6 +30,7 @@ async function run() {
         const appointmentCollection = client.db('hospitalDb').collection('allAppointments')
         const allDoctorsCollection = client.db('hospitalDb').collection('allDoctors')
         const allAdmissionCollection = client.db('hospitalDb').collection('allAdmissions')
+        const testCollection = client.db('hospitalDb').collection('allTests')
         app.get('/user', async (req, res) => {
             const result = await userCollections.find().toArray();
             res.send(result)
@@ -82,6 +83,58 @@ async function run() {
             console.log(appointment, "server user");
             res.send(result)
         })
+        app.get('/appointments', async (req, res) => {
+            const Uemail = req.query?.email;
+            let query = {};
+            if (req.query?.email) {
+                query = { Pemail: req.query?.email }
+            }
+            const result = await appointmentCollection.find(query).toArray();
+            res.send(result)
+        })
+        app.put('/appointments/:id', async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) }
+            const options = { upsert: true };
+            const updated = req.body;
+
+            const appnt = {
+                $set: {
+
+                    Pname: updated.Pname,
+                    Page: updated.Page,
+                    Pgender: updated.Pgender,
+                    address: updated.address,
+                    Ddpt: updated.Ddpt,
+                    number: updated.number,
+                    Dname: updated.Dname,
+                    Pstatus: updated.Pstatus,
+                    Pemail: updated.Pemail,
+                    ampm: updated.ampm,
+                    appointment: updated.appointment,
+                    ATime: updated.ATime
+                }
+            }
+
+            const result = await appointmentCollection.updateOne(filter, appnt, options);
+            res.send(result);
+
+        })
+
+        app.delete('/appointments/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) }
+            const result = await appointmentCollection.deleteOne(query);
+            console.log(result)
+            res.send(result);
+        })
+
+
+
+
+
+
+
         app.get('/alldoctors', async (req, res) => {
             const result = await allDoctorsCollection.find().toArray();
             res.send(result)
@@ -100,6 +153,15 @@ async function run() {
                 query['Pemail'] = req.query.Pemail;
             }
             const result = await allAdmissionCollection.find(query).toArray()
+            res.send(result)
+        })
+
+
+        // test
+        app.post('/tests', async (req, res) => {
+            const test = req.body;
+            const result = await testCollection.insertOne(test);
+            console.log(test, "patient test");
             res.send(result)
         })
 
