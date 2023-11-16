@@ -34,14 +34,11 @@ async function run() {
         const appointmentCollection = client.db('hospitalDb').collection('allAppointments')
         const allDoctorsCollection = client.db('hospitalDb').collection('allDoctors')
         const allAdmissionCollection = client.db('hospitalDb').collection('allAdmissions')
-<<<<<<< HEAD
 
         //Schedule Email Remainder
         sendEmail(appointmentCollection);
 
-=======
         const testCollection = client.db('hospitalDb').collection('allTests')
->>>>>>> origin/main
         app.get('/user', async (req, res) => {
             const result = await userCollections.find().toArray();
             res.send(result)
@@ -94,7 +91,6 @@ async function run() {
             console.log(appointment, "server user");
             res.send(result)
         })
-<<<<<<< HEAD
 
         //Get Appointments
         app.get('/appointments',async (req,res) =>{
@@ -102,7 +98,6 @@ async function run() {
             res.send(result);
         })
 
-=======
         app.get('/appointments', async (req, res) => {
             const Uemail = req.query?.email;
             let query = {};
@@ -155,7 +150,6 @@ async function run() {
 
 
 
->>>>>>> origin/main
         app.get('/alldoctors', async (req, res) => {
             const result = await allDoctorsCollection.find().toArray();
             res.send(result)
