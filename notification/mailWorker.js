@@ -1,9 +1,10 @@
 const nodemailer = require('nodemailer')
+const moment = require('moment')
 const dotenv = require('dotenv')
 
 dotenv.config()
 
-const notificationWorker = function() {
+const mailWorker = function() {
     return {
       run: function() {
         const appointments = getAppointments();
@@ -27,7 +28,7 @@ const notificationWorker = function() {
       const appointmentCollection = client.db('hospitalDb').collection('allAppointments');
       const appointments = await appointmentCollection.find().toArray();
 
-      return appointments.filter(appointment=>requiresNotification(appointment.date));
+      return appointments.filter(appointment=>requiresNotification(appointment.ATime));
 
     }
    catch(err){
@@ -50,13 +51,14 @@ const sendEmail = (appointments)=>{
       pass:process.env.EMAIL_PASSWORD
     }
   })
-  
+
   appointments.forEach(appointment=>{
+    let date = Date(appointment.ATime);
     const mailOptions = {
       from:process.env.EMAIL,
-      to:appointment.email,
+      to:appointment.Pemail,
       subject:"Appointment Remainder",
-      text:`You have an appointment with ${appointment.Pdocter} at ${appointment.date}`,
+      text:`You have an appointment with ${appointment.Dname} at ${date}`,
     }
 
     transporter.sendMail(mailOptions, function(error, info){
@@ -68,4 +70,4 @@ const sendEmail = (appointments)=>{
   })})
 }
 
-module.exports = notificationWorker();
+module.exports = mailWorker();

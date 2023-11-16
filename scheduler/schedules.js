@@ -1,6 +1,4 @@
 const nodeCrone = require('node-cron')
-const mailer = require('nodemailer')
-const moment = require('moment')
 const mailWorker = require('../notification/mailWorker')
 
 
