@@ -2,7 +2,11 @@ const express = require('express')
 const cors = require('cors')
 const port = process.env.PORT || 3000;
 require('dotenv').config();
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const {scheduler} = require('./scheduler/schedules');
+
+
+
 const app = express();
 // middleware
 app.use(cors());
@@ -27,6 +31,13 @@ async function run() {
     try {
         await client.connect();
         const userCollections = client.db('hospitalDb').collection('allUsers')
+        const appointmentCollection = client.db('hospitalDb').collection('allAppointments')
+        const allDoctorsCollection = client.db('hospitalDb').collection('allDoctors')
+        const allAdmissionCollection = client.db('hospitalDb').collection('allAdmissions')
+
+        //Schedule Email Remainder
+        sendEmail(appointmentCollection);
+
         app.get('/user', async (req, res) => {
             const result = await userCollections.find().toArray();
             res.send(result)
@@ -35,10 +46,11 @@ async function run() {
         app.post('/user', async (req, res) => {
             const user = req.body;
             const result = await userCollections.insertOne(user);
-            console.log(user);
+            console.log(user, "server user");
             res.send(result)
         })
         app.get('/user/profile', async (req, res) => {
+
             console.log(req.query?.email, "emaiiilllll que");
             if (req.query?.email) {
                 const query = { email: req.query.email }
@@ -49,14 +61,62 @@ async function run() {
 
         })
 
+
         // update user
         app.put(`/user/profile`, async (req, res) => {
-            console.log(req.body);
+            const id = req.body._id;
+            const { name, photo, email } = req.body;
+            const options = { upsert: true };
+            const filter = { _id: new ObjectId(id) }
+            const updatedUser = { $set: { name, photo, email } }
+            const result = await userCollections.updateOne(filter, updatedUser, options)
+            res.send({ message: 'successfully updated', result });
+
+        })
+
+
+        app.delete('/user/:id', async (req, res) => {
+            const id = req.params.id;
+            const deleteResult = await userCollections.deleteOne({ _id: new ObjectId(id) });
+            res.send(deleteResult)
         })
 
 
 
+        // appointment
+        app.post('/appointments', async (req, res) => {
+            const appointment = req.body;
+            const result = await appointmentCollection.insertOne(appointment);
+            console.log(appointment, "server user");
+            res.send(result)
+        })
 
+        //Get Appointments
+        app.get('/appointments',async (req,res) =>{
+            const result = await appointmentCollection.find().toArray();
+            res.send(result);
+        })
+
+        app.get('/alldoctors', async (req, res) => {
+            const result = await allDoctorsCollection.find().toArray();
+            res.send(result)
+        })
+
+        // admission
+        app.post('/admission', async (req, res) => {
+            const admission = req.body;
+            const result = await allAdmissionCollection.insertOne(admission);
+            console.log(admission, "server user");
+            res.send({ success: true })
+        })
+        app.get('/admission', async (req, res) => {
+            let query = {}
+            if (req.query?.Pemail) {
+                query['Pemail'] = req.query.Pemail;
+            }
+            const result = await allAdmissionCollection.find(query).toArray()
+            res.send(result)
+        })
 
 
         await client.db("admin").command({ ping: 1 });
@@ -68,12 +128,20 @@ async function run() {
 }
 run().catch(console.dir);
 
+const sendEmail = async(appointmentCollection)=>{
+    const res = await appointmentCollection.find().toArray();
 
+    console.log(res);
+}
+
+
+
+//Run the notification scheduler
+scheduler.run();
 // connet to port 
 app.listen(port, () => {
     console.log('server is running on port ', port);
 })
-
 
 
 
