@@ -1,11 +1,40 @@
 const express = require('express')
 const cors = require('cors')
+const cron = require('node-cron');
 const port = process.env.PORT || 3000;
 require('dotenv').config();
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express();
+const socketIO = require('socket.io');
+const http = require('http');
+const server = http.createServer(app);
+const { parseISO } = require('date-fns');
+const io = socketIO(server, {
+    cors: {
+        origin: 'http://localhost:5173',
+        methods: ['GET', 'POST'],
+    },
+    transports: ['websocket', 'polling'],
+});
+
+io.on('connection', (socket) => {
+    console.log('Client connected');
+
+    socket.emit('notification', { message: 'Welcome to the Pharmacy Management System' });
+
+    socket.on('disconnect', () => {
+        console.log('Client disconnected');
+    });
+});
+
+
 // middleware
-app.use(cors());
+app.use(cors(
+    {
+        origin: ['http://localhost:5173'],
+        credentials: true
+    }
+));
 app.use(express.json())
 
 app.get('/', (req, res) => {
@@ -22,7 +51,6 @@ const client = new MongoClient(uri, {
         deprecationErrors: true,
     }
 });
-
 async function run() {
     try {
         await client.connect();
@@ -31,15 +59,70 @@ async function run() {
         const allDoctorsCollection = client.db('hospitalDb').collection('allDoctors')
         const allAdmissionCollection = client.db('hospitalDb').collection('allAdmissions')
         const testCollection = client.db('hospitalDb').collection('allTests')
-        app.get('/user', async (req, res) => {
-            const result = await userCollections.find().toArray();
+        const medicineCollection = client.db('hospitalDb').collection('Medicines')
+
+        setInterval(async () => {
+            try {
+
+                const currentDate = new Date();
+                const currentDateString = currentDate.toISOString().split('T')[0];
+                const expiredMedicines = await medicineCollection.find({
+                    expirationDate: { $lt: currentDateString }
+                }).toArray();
+
+                const nearExpirationMedicines = await medicineCollection.find({
+                    expirationDate: {
+                        $gte: currentDateString,
+                        $lt: new Date(currentDate.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+                    },
+                }).toArray();
+                console.log(nearExpirationMedicines, "Expired Medicines");
+
+                if (nearExpirationMedicines.length > 0) {
+                    console.log("Sending notification");
+                    io.emit('notification', {
+                        near: `Alert: ${nearExpirationMedicines.length} medicines is near to expire.`,
+                    });
+                }
+
+                if (expiredMedicines.length > 0) {
+                    // console.log("Sending notification");
+                    io.emit('notification', {
+                        message: `Alert: ${expiredMedicines.length} medicines have expired.`,
+                    });
+                }
+                const quantity = await medicineCollection.find({ quantity: { $lt: 5 } }).toArray();
+                console.log(quantity, "qua");
+                if (quantity.length > 0) {
+                    io.emit('notification', {
+                        stock: `Alert: ${quantity.length} some medicine has lower stock or or of stock.`,
+                    });
+                }
+
+            } catch (error) {
+                console.error('Error in periodic check:', error);
+            }
+        }, 1000);
+
+
+
+
+
+        app.get('/admission', async (req, res) => {
+            let query = {}
+            if (req.query?.Pemail) {
+                query['Pemail'] = req.query.Pemail;
+            }
+            const result = await allAdmissionCollection.find(query).toArray()
+            res.send(result)
+        })
+        app.get('/alldoctors', async (req, res) => {
+            const result = await allDoctorsCollection.find().toArray();
             res.send(result)
         })
 
-        app.post('/user', async (req, res) => {
-            const user = req.body;
-            const result = await userCollections.insertOne(user);
-            console.log(user, "server user");
+        app.get('/user', async (req, res) => {
+            const result = await userCollections.find().toArray();
             res.send(result)
         })
         app.get('/user/profile', async (req, res) => {
@@ -49,13 +132,81 @@ async function run() {
                 const query = { email: req.query.email }
                 const result = await userCollections.find(query).toArray()
                 res.send(result);
-
             }
-
+        })
+        app.get('/appointments', async (req, res) => {
+            const email = req.query?.email;
+            let query = {};
+            if (req.query?.email) {
+                query = { Pemail: req.query?.email }
+            }
+            const result = await appointmentCollection.find(query).toArray();
+            res.send(result)
+        })
+        app.get('/medicine', async (req, res) => {
+            const medicine_id = req.query?.medicine_id;
+            console.log(req.query, "lahfiafafia");
+            let query = {};
+            console.log(query, medicine_id, "hello boy");
+            if (req.query?.medicine_id) {
+                query = { _id: new ObjectId(medicine_id) }
+            }
+            console.log(query, "hh");
+            const result = await medicineCollection.find(query).toArray();
+            console.log(result, "hhh");
+            res.send(result)
+            // }
+            // catch (error) {
+            //     console.error('Error retrieving medicine data:', error);
+            //     res.status(500).send('Internal Server Error');
+            // }
         })
 
 
-        // update user
+
+        app.post('/medicine', async (req, res) => {
+            try {
+                const medicine = req.body;
+                const result = await medicineCollection.insertOne(medicine);
+                console.log(medicine, "medddd");
+                res.status(201).send({ result: result, message: 'Medicine inserted successfully', });
+                // res.status(201).send({ message: 'Medicine inserted successfully', insertedId: result.insertedId });
+
+            } catch (error) {
+                console.error('Error inserting medicine:', error);
+                res.status(500).send({ message: error.message })
+            }
+        });
+        app.post('/admission', async (req, res) => {
+            const admission = req.body;
+            const result = await allAdmissionCollection.insertOne(admission);
+            console.log(admission, "server user");
+            res.send({ success: true })
+        })
+        app.post('/user', async (req, res) => {
+            const user = req.body;
+            const result = await userCollections.insertOne(user);
+            console.log(user, "server user");
+            res.send(result)
+        })
+        app.post('/appointments', async (req, res) => {
+            const appointment = req.body;
+            const result = await appointmentCollection.insertOne(appointment);
+            console.log(appointment, "server user");
+            res.send(result)
+        })
+        // test
+        app.post('/tests', async (req, res) => {
+            const test = req.body;
+            const result = await testCollection.insertOne(test);
+            console.log(test, "patient test");
+            res.send(result)
+        })
+
+
+
+
+
         app.put(`/user/profile`, async (req, res) => {
             const id = req.body._id;
             const { name, photo, email } = req.body;
@@ -66,32 +217,6 @@ async function run() {
             res.send({ message: 'successfully updated', result });
 
         })
-
-
-        app.delete('/user/:id', async (req, res) => {
-            const id = req.params.id;
-            const deleteResult = await userCollections.deleteOne({ _id: new ObjectId(id) });
-            res.send(deleteResult)
-        })
-
-
-
-        // appointment
-        app.post('/appointments', async (req, res) => {
-            const appointment = req.body;
-            const result = await appointmentCollection.insertOne(appointment);
-            console.log(appointment, "server user");
-            res.send(result)
-        })
-        app.get('/appointments', async (req, res) => {
-            const Uemail = req.query?.email;
-            let query = {};
-            if (req.query?.email) {
-                query = { Pemail: req.query?.email }
-            }
-            const result = await appointmentCollection.find(query).toArray();
-            res.send(result)
-        })
         app.put('/appointments/:id', async (req, res) => {
             const id = req.params.id;
             const filter = { _id: new ObjectId(id) }
@@ -100,7 +225,6 @@ async function run() {
 
             const appnt = {
                 $set: {
-
                     Pname: updated.Pname,
                     Page: updated.Page,
                     Pgender: updated.Pgender,
@@ -115,12 +239,43 @@ async function run() {
                     ATime: updated.ATime
                 }
             }
-
             const result = await appointmentCollection.updateOne(filter, appnt, options);
             res.send(result);
 
         })
+        app.patch('/medicine', async (req, res) => {
+            try {
+                const medicine_id = req.query?.medicine_id;
+                const filter = { _id: new ObjectId(medicine_id) }
+                const updated = req.body;
+                console.log(updated, "server upppp");
+                const med = {
+                    $set: {
+                        name: updated.name,
+                        price: parseFloat(updated.price),
+                        quantity: updated.quantity,
+                        expirationDate: updated.expirationDate,
+                        productionDate: updated.productionDate,
+                        usage: updated.usage,
+                        stockStatus: updated.stockStatus,
+                        status: updated.status
+                    }
+                }
+                const result = await medicineCollection.updateOne(filter, med);
+                res.send(result);
+            } catch (error) {
+                res.status(500).send({ message: error.message })
+            }
 
+
+        }
+        )
+
+        app.delete('/user/:id', async (req, res) => {
+            const id = req.params.id;
+            const deleteResult = await userCollections.deleteOne({ _id: new ObjectId(id) });
+            res.send(deleteResult)
+        })
         app.delete('/appointments/:id', async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) }
@@ -128,42 +283,18 @@ async function run() {
             console.log(result)
             res.send(result);
         })
-
-
-
-
-
-
-
-        app.get('/alldoctors', async (req, res) => {
-            const result = await allDoctorsCollection.find().toArray();
-            res.send(result)
-        })
-
-        // admission
-        app.post('/admission', async (req, res) => {
-            const admission = req.body;
-            const result = await allAdmissionCollection.insertOne(admission);
-            console.log(admission, "server user");
-            res.send({ success: true })
-        })
-        app.get('/admission', async (req, res) => {
-            let query = {}
-            if (req.query?.Pemail) {
-                query['Pemail'] = req.query.Pemail;
+        app.delete('/medicine/:id', async (req, res) => {
+            try {
+                const id = req.params.id;
+                const query = { _id: new ObjectId(id) }
+                const result = await medicineCollection.deleteOne(query);
+                res.send(result);
             }
-            const result = await allAdmissionCollection.find(query).toArray()
-            res.send(result)
+            catch (error) {
+                res.send({ message: error.message, Stack_trace: error.stack, })
+            }
         })
 
-
-        // test
-        app.post('/tests', async (req, res) => {
-            const test = req.body;
-            const result = await testCollection.insertOne(test);
-            console.log(test, "patient test");
-            res.send(result)
-        })
 
 
         await client.db("admin").command({ ping: 1 });
@@ -175,10 +306,12 @@ async function run() {
 }
 run().catch(console.dir);
 // connet to port 
-app.listen(port, () => {
-    console.log('server is running on port ', port);
-})
-
+// app.listen(port, () => {
+//     console.log('server is running on port ', port);
+// })
+server.listen(process.env.PORT || 3000, () => {
+    console.log('Server is running on port', process.env.PORT || 3000);
+});
 
 
 
